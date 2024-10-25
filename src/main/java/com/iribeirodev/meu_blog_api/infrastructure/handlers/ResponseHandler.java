@@ -1,39 +1,59 @@
 package com.iribeirodev.meu_blog_api.infrastructure.handlers;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.server.ServerHttpRequest;
+import org.springframework.http.server.ServerHttpResponse;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
+import com.iribeirodev.meu_blog_api.responses.APIResponse;
 
-public class ResponseHandler {
-    
-    public static ResponseEntity<Map<String, Object>> generateResponse(HttpStatus status, Object responseObj) {
-        Map<String, Object> response = new HashMap<>();
+@ControllerAdvice(annotations = RestController.class)
+public class ResponseHandler implements ResponseBodyAdvice<Object> {
+
+    @Override
+    public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
+        return true;
+    }
+
+    @Override
+    public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType,
+                                  Class<? extends HttpMessageConverter<?>> selectedConverterType,
+                                  ServerHttpRequest request, ServerHttpResponse response) {
+        APIResponse apiResponse = new APIResponse();
         
-        // Verifica se o objeto de resposta é vazio
-        if (responseObj instanceof Collection<?> && ((Collection<?>) responseObj).isEmpty()) {
-            response.put("message", "No content found");
-            response.put("status", HttpStatus.NO_CONTENT.value());
-            return new ResponseEntity<>(response, HttpStatus.NO_CONTENT);
+        if (body == null || (body instanceof List && ((List<?>) body).isEmpty())) {
+            response.setStatusCode(HttpStatus.NOT_FOUND);
+            apiResponse.setStatus(HttpStatus.NOT_FOUND.value());
+            apiResponse.setMessage("Resource not found");
+            apiResponse.setData(null);
+            return apiResponse;
         }
-        
-        // Prepara a resposta padrão
-        response.put("status", status.value());
-        response.put("data", responseObj);
-        
-        return new ResponseEntity<>(response, status);
+        if (body instanceof APIResponse) {
+            return body;
+        }
+
+        apiResponse.setStatus(HttpStatus.OK.value());
+        apiResponse.setData(body);
+        return apiResponse;
     }
 
-    public static ResponseEntity<Map<String, Object>> generateNotFound(String message) {
-        return generateResponse(HttpStatus.NOT_FOUND, Map.of("message", message));
-    }
-
-    public static ResponseEntity<Map<String, Object>> generateError(String message) {
-        return generateResponse(HttpStatus.INTERNAL_SERVER_ERROR, Map.of("message", message != null ? message : "Unexpected error"));
-    }
-
-    public static ResponseEntity<Map<String, Object>> generateError() {
-        return generateError("Unexpected error");
+    // Handler de exceções
+    @ExceptionHandler(Exception.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseBody
+    public APIResponse handleException(Exception ex) {
+        APIResponse response = new APIResponse();
+        response.setStatus(HttpStatus.BAD_REQUEST.value());
+        response.setMessage("Erro de requisição");
+        response.setData(null);
+        return response;
     }
 }
